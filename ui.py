@@ -21,7 +21,7 @@ def load_and_index():
     if "GOOGLE_API_KEY" in st.secrets:
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
     else:
-        os.environ["GOOGLE_API_KEY"] = "AIzaSyBNuXGzUhMWBGuDU2EyB9SD1sK4gWL49pI"
+        os.environ["GOOGLE_API_KEY"] = "AIzaSyBNuXGzUhMWEyB9SD1sK4gWL49pI"
     repo_path = "./repo_data/"
 
     # Handle Windows Permission issues
@@ -119,4 +119,5 @@ if user_query := st.chat_input("Ask me about the portfolio..."):
     st.session_state.chat_history.extend([
         HumanMessage(content=user_query),
         AIMessage(content=answer)
+
     ])
