@@ -21,7 +21,7 @@ def load_and_index():
     if "GOOGLE_API_KEY" in st.secrets:
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
     else:
-        os.environ["GOOGLE_API_KEY"] = "NONE"
+        os.environ["GOOGLE_API_KEY"] = "REMOVED"
     repo_path = "./repo_data/"
 
     # Handle Windows Permission issues
@@ -134,6 +134,7 @@ if user_query := st.chat_input("Ask me about the portfolio..."):
         AIMessage(content=answer)
 
     ])
+
 
 
 
