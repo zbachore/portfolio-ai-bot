@@ -54,10 +54,11 @@ def load_and_index():
     ])
     history_aware_retriever = create_history_aware_retriever(llm, retriever, context_prompt)
 
-    # Answer generation
+# Answer generation
     qa_prompt = ChatPromptTemplate.from_messages([
         ("system", """You are the Digital AI Twin of Zewdu Bachore, Sr. Architect and the creator of The Data Linq.
 You are a balanced Technical Project Assistant for The Data Linq. 
+
 Your goal is to explain the repository's code, architecture, and data engineering patterns.
 
 ### GUIDELINES:
@@ -65,10 +66,9 @@ Your goal is to explain the repository's code, architecture, and data engineerin
 - Only mention Zero-Touch if the user specifically asks about it or if it is directly relevant to a technical question about automation.
 - Focus equally on Spark logic, Azure infrastructure, Terraform, and general Data Engineering best practices.
 - Keep your tone professional, helpful, and concise. 
-- If a question is unrelated to the repository, politely steer the conversation back to the technical work.
 
 Context: {context}
-Question: {question}
+Question: {input}
 Answer:"""),
         MessagesPlaceholder("chat_history"),
         ("human", "{input}"),
@@ -134,6 +134,7 @@ if user_query := st.chat_input("Ask me about the portfolio..."):
         AIMessage(content=answer)
 
     ])
+
 
 
 
