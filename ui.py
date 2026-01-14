@@ -4,29 +4,31 @@ import shutil
 import stat
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
-from langchain_classic.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import GitLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import DocArrayInMemorySearch
 
-# Updated Page Branding
+# Page Configuration
 st.set_page_config(page_title="DataLinq Architectural Overseer", page_icon="🏢")
 st.title("🏢 DataLinq Architectural Overseer")
 st.markdown("### Technical Standards & Reference Repository")
 
-# --- 1. THE BRAIN ---
+# --- 1. THE BRAIN (RAG Logic) ---
 @st.cache_resource 
 def load_and_index():
+    # API Key Configuration
     if "GOOGLE_API_KEY" in st.secrets:
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
     else:
-        # Fallback for local testing
-        os.environ["GOOGLE_API_KEY"] = "REMOVED"
-        
+        st.error("Missing GOOGLE_API_KEY in Streamlit Secrets.")
+        st.stop()
+
     repo_path = "./repo_data/"
 
+    # Handle Permission issues for clearing existing repo data
     def remove_readonly(func, path, excinfo):
         os.chmod(path, stat.S_IWRITE)
         func(path)
@@ -34,26 +36,39 @@ def load_and_index():
     if os.path.exists(repo_path):
         shutil.rmtree(repo_path, onerror=remove_readonly)
 
-    loader = GitLoader(clone_url="https://github.com/zbachore/thedatalinq", repo_path=repo_path, branch="main")
-    docs = loader.load()
+    # Load documentation from GitHub
+    try:
+        loader = GitLoader(
+            clone_url="https://github.com/zbachore/thedatalinq", 
+            repo_path=repo_path, 
+            branch="main"
+        )
+        docs = loader.load()
+    except Exception as e:
+        st.error(f"Failed to clone repository: {e}")
+        st.stop()
     
+    # Text Processing
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_documents(docs)
+    
+    # Embeddings and Vector Store
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vectorstore = DocArrayInMemorySearch.from_documents(chunks, embeddings)
     retriever = vectorstore.as_retriever()
     
-    # Update to Gemini 1.5 or 2.0 Flash as available
-    llm = GoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+    # Setup Chat LLM (Corrected model and class)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
     
+    # History-aware rephrasing prompt
     context_prompt = ChatPromptTemplate.from_messages([
-        ("system", "Formulate a standalone question based on history."),
+        ("system", "Given a chat history and the latest user question which might reference context in the chat history, formulate a standalone question which can be understood without the chat history. Do NOT answer the question, just reformulate it if needed and otherwise return it as is."),
         MessagesPlaceholder("chat_history"),
         ("human", "{input}"),
     ])
     history_aware_retriever = create_history_aware_retriever(llm, retriever, context_prompt)
 
-    # --- UPDATED SYSTEM PROMPT ---
+    # Answer generation system prompt
     qa_prompt = ChatPromptTemplate.from_messages([
         ("system", """You are the DataLinq Architectural Overseer, an authoritative technical documentation specialist.
         
@@ -81,38 +96,43 @@ Answer:"""),
     qa_chain = create_stuff_documents_chain(llm, qa_prompt)
     return create_retrieval_chain(history_aware_retriever, qa_chain)
 
-# --- 2. DEFINE THE GLOBAL VARIABLE ---
+# --- 2. INITIALIZE CHAIN ---
 try:
     rag_chain = load_and_index()
 except Exception as e:
-    st.error(f"Failed to load the RAG chain: {e}")
+    st.error(f"Initialization Error: {e}")
     st.stop()
 
 # --- 3. SESSION STATE FOR CHAT ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# Render chat history
 for message in st.session_state.chat_history:
-    with st.chat_message("Human" if isinstance(message, HumanMessage) else "AI"):
+    role = "Human" if isinstance(message, HumanMessage) else "AI"
+    with st.chat_message(role):
         st.write(message.content)
 
-# User input loop
+# User Interaction
 if user_query := st.chat_input("Ask about architectural patterns..."):
     with st.chat_message("Human"):
         st.write(user_query)
 
     with st.spinner("Analyzing Repository Patterns..."):
-        response = rag_chain.invoke({
-            "input": user_query, 
-            "chat_history": st.session_state.chat_history
-        })
-        answer = response["answer"]
-        
-    with st.chat_message("AI"):
-        st.write(answer)
-        # SECTION REMOVED: Citations/Sources are no longer printed here.
+        try:
+            response = rag_chain.invoke({
+                "input": user_query, 
+                "chat_history": st.session_state.chat_history
+            })
+            answer = response["answer"]
+            
+            with st.chat_message("AI"):
+                st.write(answer)
 
-    st.session_state.chat_history.extend([
-        HumanMessage(content=user_query),
-        AIMessage(content=answer)
-    ])
+            # Update Session History
+            st.session_state.chat_history.extend([
+                HumanMessage(content=user_query),
+                AIMessage(content=answer)
+            ])
+        except Exception as e:
+            st.error(f"Error generating response: {e}")
